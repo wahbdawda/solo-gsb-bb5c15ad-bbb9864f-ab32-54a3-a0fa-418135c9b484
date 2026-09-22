@@ -81,6 +81,7 @@
     <h2>③ 标签变更预览</h2>
     <div id="summary" class="summary"></div>
 
+    <div id="previewGate" class="gate hidden"></div>
     <div id="warningBox" class="warnings hidden"></div>
 
     <div class="tabs">
@@ -150,12 +151,13 @@
   <section class="card hidden" id="resultCard">
     <h2>④ 完成</h2>
     <div id="resultSummary" class="summary"></div>
+    <div id="resultGate" class="gate hidden"></div>
     <div id="resultWarnings" class="warnings hidden"></div>
     <div class="actions">
       <a id="btnDownload" class="btn primary" href="#">下载匿名化 ZIP</a>
       <button id="btnStartOver" class="btn ghost">开始新的任务</button>
     </div>
-    <p class="hint">ZIP 内以 <code>新StudyUID/新SeriesUID/新SOPUID.dcm</code> 组织，并附带 <code>anonymization-report.json</code>（仅含新标识与统计，不含原值）。</p>
+    <p class="hint">ZIP 内以 <code>新StudyUID/新SeriesUID/新SOPUID.dcm</code> 组织，并附带 <code>anonymization-report.json</code>（仅含新标识、统计与残留标识门禁摘要，不含原值）。</p>
   </section>
 
 </main>

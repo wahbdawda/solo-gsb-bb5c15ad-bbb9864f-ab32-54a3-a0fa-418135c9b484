@@ -10,7 +10,6 @@ const state = {
   pageSize: 50,
   filteredChanges: [],
 };
-
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
@@ -266,10 +265,67 @@ function renderWarnings(box, warnings) {
     <ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>`;
 }
 
+const GATE_TYPE_LABELS = {
+  patient_name: "患者姓名",
+  patient_id: "患者 ID",
+  original_uid: "原始 UID",
+};
+
+function renderGate(box, gate) {
+  if (!gate) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+  box.classList.remove("hidden");
+  const ids = gate.identifiers || {};
+  const byType = gate.hits_by_type || {};
+  const head = gate.passed
+    ? `<h4 class="gate-title">🛡 残留标识门禁：通过</h4>`
+    : `<h4 class="gate-title">⛔ 残留标识门禁：未通过（${gate.hit_count} 处命中，ZIP 已阻止）</h4>`;
+  const meta = `<div class="gate-meta">
+      扫描 ${gate.scanned_files ?? 0} 个文件（DICOM ${gate.scanned_dicom_files ?? 0} ·
+      报告 ${gate.scanned_report_files ?? 0}）、${gate.values_checked ?? 0} 个文本值；
+      比对源标识：患者姓名 ${ids.patient_names ?? 0} ·
+      患者 ID ${ids.patient_ids ?? 0} · 原始 UID ${ids.original_uids ?? 0}；
+      命中：姓名 ${byType.patient_name ?? 0} · ID ${byType.patient_id ?? 0}
+      · UID ${byType.original_uid ?? 0}
+    </div>`;
+  let hits = "";
+  if (gate.hits && gate.hits.length) {
+    hits = `<div class="table-wrap gate-hits">
+      <table>
+        <thead><tr><th>输出文件</th><th>位置（标签 / JSON 路径）</th><th>VR</th>
+          <th>命中类型</th><th>命中的源标识</th></tr></thead>
+        <tbody>${gate.hits.map((h) => `<tr>
+          <td class="code-cell">${escapeHtml(h.file)}</td>
+          <td class="code-cell">${escapeHtml(h.location)}</td>
+          <td>${escapeHtml(h.vr || "-")}</td>
+          <td><span class="badge b-gate-${escapeHtml(h.hit_type)}">${
+            escapeHtml(h.hit_type_label || GATE_TYPE_LABELS[h.hit_type] || h.hit_type)}</span></td>
+          <td class="code-cell oldval">${escapeHtml(h.matched)}</td>
+        </tr>`).join("")}</tbody>
+      </table>${gate.hits_truncated
+        ? `<div class="gate-trunc">仅显示前 ${gate.hits.length} 条，完整命中数为 ${gate.hit_count}。</div>`
+        : ""}
+    </div>`;
+  }
+  box.className = "gate " + (gate.passed ? "gate-ok" : "gate-fail");
+  box.innerHTML = head + meta + hits;
+}
+
 function renderPreview(data) {
   $("#profileTag")?.remove();
   renderSummary($("#summary"), data.counts, data.patients);
+  renderGate($("#previewGate"), data.gate);
   renderWarnings($("#warningBox"), data.warnings);
+
+  // Gate failures at preview time cannot become a downloadable ZIP: keep the
+  // action visible (the hit table explains why) but block the click.
+  const processBtn = $("#btnProcess");
+  if (data.gate && data.gate.passed === false) {
+    processBtn.disabled = true;
+    processBtn.textContent = `残留标识门禁未通过（${data.gate.hit_count} 处命中）`;
+  } else {
+    processBtn.disabled = false;
+    processBtn.textContent = "执行匿名化并打包";
+  }
 
   // changes
   const actionSelect = $("#changeAction");
@@ -400,7 +456,21 @@ $("#btnProcess").addEventListener("click", async () => {
       body: JSON.stringify(body),
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.detail || "处理失败");
+    if (!resp.ok) {
+      // 409: residual identifier gate blocked ZIP generation -- show the
+      // hit table on the preview page instead of a plain toast.
+      if (resp.status === 409 && data.detail?.residue_identifier_gate) {
+        const gate = data.detail.residue_identifier_gate;
+        if (state.preview) state.preview.gate = gate;
+        renderGate($("#previewGate"), gate);
+        btn.textContent = `残留标识门禁未通过（${gate.hit_count} 处命中）`;
+        toast("残留标识门禁阻止了 ZIP 生成，请查看命中清单并调整选项。", true);
+        return;
+      }
+      throw new Error(
+        (typeof data.detail === "string" ? data.detail : data.detail?.message)
+        || "处理失败");
+    }
 
     if (resp.status === 202) {
       await pollUntilDone();
@@ -409,7 +479,6 @@ $("#btnProcess").addEventListener("click", async () => {
     }
   } catch (err) {
     toast(err.message, true);
-  } finally {
     btn.disabled = false; btn.textContent = "执行匿名化并打包";
   }
 });
@@ -419,6 +488,14 @@ async function pollUntilDone() {
     await new Promise((r) => setTimeout(r, 2000));
     const s = await fetch(`/api/jobs/${state.jobId}/status`).then((r) => r.json());
     if (s.status === "done") { finishJob(s); return; }
+    if (s.status === "blocked") {
+      if (s.gate && state.preview) {
+        state.preview.gate = s.gate;
+        renderGate($("#previewGate"), s.gate);
+        showCard("previewCard");
+      }
+      throw new Error(s.error || "残留标识门禁未通过。");
+    }
     if (s.status === "error") throw new Error(s.error || "处理失败");
   }
   throw new Error("处理超时，请稍后重试。");
@@ -428,6 +505,7 @@ function finishJob(data) {
   $("#btnDownload").href = data.download_url;
   $("#btnDownload").setAttribute("download", data.zip_filename || "anonymized.zip");
   renderSummary($("#resultSummary"), data.counts, []);
+  renderGate($("#resultGate"), data.gate);
   renderWarnings($("#resultWarnings"), data.warnings);
   showCard("resultCard");
   toast("匿名化完成，ZIP 已就绪。");

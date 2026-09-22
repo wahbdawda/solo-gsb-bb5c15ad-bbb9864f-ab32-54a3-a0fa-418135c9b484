@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config
 from .dicom_catalog import DEFAULT_PROFILE, PROFILES
 from .jobs import STORE, resolve_options, run
+from .residue_gate import GateBlocked
 from .schemas import AnonymizationOptions
 
 app = FastAPI(
@@ -87,6 +88,7 @@ def _serialize(payload: dict, job_id: str, profile_label: str,
         "warnings": payload["warnings"],
         "counts": payload["counts"],
         "patients": payload["patients"],
+        "gate": payload.get("gate"),
     }
 
 
@@ -110,6 +112,14 @@ def process(job_id: str, payload: AnonymizationOptions) -> dict:
     # do not block the event loop (preview/status/download stay responsive).
     try:
         run(job, profile_name, options, salt, write=True)
+    except GateBlocked as blocked:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(blocked),
+                "residue_identifier_gate": blocked.result.as_dict(),
+            },
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -124,6 +134,7 @@ def process(job_id: str, payload: AnonymizationOptions) -> dict:
         "files": job.last_result["files"] if job.last_result else [],
         "warnings": job.last_result["warnings"] if job.last_result else [],
         "counts": job.last_result["counts"] if job.last_result else {},
+        "gate": job.last_result.get("gate") if job.last_result else None,
     }
 
 
@@ -140,6 +151,7 @@ def job_status(job_id: str) -> dict:
         "download_url": (f"/api/jobs/{job_id}/download"
                          if job.status == "done" else None),
         "zip_filename": job.zip_filename,
+        "gate": job.last_gate,
     }
 
 
@@ -149,6 +161,10 @@ def download(job_id: str):
         job = STORE.get(job_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="任务不存在或已过期。")
+    if job.status == "blocked":
+        raise HTTPException(
+            status_code=409,
+            detail="残留标识门禁未通过，ZIP 未生成；请调整匿名化选项后重新执行。")
     if job.status != "done" or not job.zip_path or \
             not job.zip_path.exists():
         raise HTTPException(status_code=409,

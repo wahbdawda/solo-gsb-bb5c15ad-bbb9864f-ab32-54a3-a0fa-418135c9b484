@@ -40,6 +40,30 @@ class FieldChange(BaseModel):
     new: str | None = None
 
 
+class GateHit(BaseModel):
+    file: str
+    location: str
+    tag: str
+    vr: str | None = None
+    hit_type: Literal["patient_name", "patient_id", "original_uid"]
+    hit_type_label: str
+    matched: str
+
+
+class GateResult(BaseModel):
+    passed: bool
+    scanned_dicom_files: int
+    scanned_report_files: int
+    scanned_files: int
+    values_checked: int
+    identifiers: dict[str, int]
+    hit_count: int
+    hits_by_type: dict[str, int]
+    hits_truncated: bool
+    generated_at: str
+    hits: list[GateHit] = []
+
+
 class FileResult(BaseModel):
     index: int
     source_path: str            # sanitised relative upload path
@@ -69,6 +93,7 @@ class PreviewResponse(BaseModel):
     warnings: list[str]
     counts: dict[str, int]
     patients: list[dict[str, str]]
+    gate: GateResult | None = None
 
 
 class ProcessResponse(BaseModel):
@@ -79,3 +104,4 @@ class ProcessResponse(BaseModel):
     files: list[FileResult]
     warnings: list[str]
     counts: dict[str, int]
+    gate: GateResult | None = None
