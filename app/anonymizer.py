@@ -282,6 +282,11 @@ class Anonymizer:
         }
         self.global_warnings: list[str] = []
         self._used_outputs: set[str] = set()
+        # Original source identifiers collected during prescan for the
+        # residual identifier gate (patient names/IDs; UIDs come from
+        # ``uid_map`` keys once remapping has run).
+        self.source_patient_names: set[str] = set()
+        self.source_patient_ids: set[str] = set()
 
     # -- deterministic derivations ----------------------------------------
 
@@ -344,6 +349,10 @@ class Anonymizer:
             fi.old_patient_name = (
                 str(getattr(ds, "PatientName", "") or "") or None
             )
+            if fi.old_patient_name:
+                self.source_patient_names.add(fi.old_patient_name)
+            if fi.old_patient_id:
+                self.source_patient_ids.add(fi.old_patient_id)
             fi.old_study_uid = str(getattr(ds, "StudyInstanceUID", "")
                                    or "") or None
             fi.old_series_uid = str(getattr(ds, "SeriesInstanceUID", "")

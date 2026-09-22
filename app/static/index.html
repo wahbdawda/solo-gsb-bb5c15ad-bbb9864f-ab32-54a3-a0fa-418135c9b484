@@ -12,7 +12,7 @@
     <span class="logo">⬠</span>
     <div>
       <h1>DICOM 检查匿名化工作台</h1>
-      <p>患者级稳定伪名 · UID 一致性重写 · 逐字段变更预览 · 打包下载</p>
+      <p>患者级稳定伪名 · UID 一致性重写 · 逐字段变更预览 · 残留标识门禁 · 打包下载</p>
     </div>
   </div>
   <div id="stepIndicator" class="steps">
@@ -82,6 +82,7 @@
     <div id="summary" class="summary"></div>
 
     <div id="warningBox" class="warnings hidden"></div>
+    <div id="gateBox" class="gate hidden"></div>
 
     <div class="tabs">
       <button class="tab active" data-tab="changes">逐字段变更</button>
@@ -150,6 +151,7 @@
   <section class="card hidden" id="resultCard">
     <h2>④ 完成</h2>
     <div id="resultSummary" class="summary"></div>
+    <div id="resultGate" class="gate hidden"></div>
     <div id="resultWarnings" class="warnings hidden"></div>
     <div class="actions">
       <a id="btnDownload" class="btn primary" href="#">下载匿名化 ZIP</a>

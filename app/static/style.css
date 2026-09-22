@@ -202,6 +202,20 @@ h1 { font-size: 18px; margin: 0; }
 .warnings ul { margin: 0; padding-left: 18px; }
 .warnings li { font-size: 12.5px; line-height: 1.6; color: #f0d9ae; }
 
+/* residual identifier gate */
+.gate {
+  margin: 12px 0; border-radius: 10px; padding: 10px 14px;
+  border: 1px solid var(--line); background: var(--panel-2);
+}
+.gate h4 { margin: 0 0 6px; font-size: 13.5px; }
+.gate p { margin: 4px 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+.gate.ok { border-color: rgba(53,208,127,.45); background: rgba(53,208,127,.07); }
+.gate.ok h4 { color: var(--ok); }
+.gate.blocked { border-color: rgba(255,107,107,.5); background: rgba(255,107,107,.08); }
+.gate.blocked h4 { color: var(--danger); }
+.gate .table-wrap { margin-top: 8px; max-height: 360px; }
+.gate-table td.code-cell { max-width: 320px; }
+
 /* tabs */
 .tabs { display: flex; gap: 6px; margin: 16px 0 0; border-bottom: 1px solid var(--line); }
 .tab {

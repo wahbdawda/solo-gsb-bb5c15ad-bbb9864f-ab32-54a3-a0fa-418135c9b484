@@ -60,6 +60,27 @@ class FileResult(BaseModel):
     error: str | None = None
 
 
+class GateHit(BaseModel):
+    file: str
+    tag: str
+    tag_name: str | None = None
+    vr: str | None = None
+    hit_type: Literal["patient_name", "patient_id", "original_uid",
+                      "scan_error"]
+    evidence: str | None = None
+
+
+class GateSummary(BaseModel):
+    status: Literal["passed", "blocked"]
+    scanned_dicom_files: int
+    scanned_report: bool
+    values_checked: int
+    identifiers: dict[str, int]
+    hit_count: int
+    truncated: bool = False
+    hits: list[GateHit] = []
+
+
 class PreviewResponse(BaseModel):
     job_id: str
     profile_label: str
@@ -69,6 +90,7 @@ class PreviewResponse(BaseModel):
     warnings: list[str]
     counts: dict[str, int]
     patients: list[dict[str, str]]
+    gate: GateSummary | None = None
 
 
 class ProcessResponse(BaseModel):
@@ -79,3 +101,4 @@ class ProcessResponse(BaseModel):
     files: list[FileResult]
     warnings: list[str]
     counts: dict[str, int]
+    gate: GateSummary | None = None

@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .dicom_catalog import DEFAULT_PROFILE, PROFILES
-from .jobs import STORE, resolve_options, run
+from .jobs import GateBlockedError, STORE, resolve_options, run
 from .schemas import AnonymizationOptions
 
 app = FastAPI(
@@ -87,6 +87,7 @@ def _serialize(payload: dict, job_id: str, profile_label: str,
         "warnings": payload["warnings"],
         "counts": payload["counts"],
         "patients": payload["patients"],
+        "gate": payload.get("gate"),
     }
 
 
@@ -98,6 +99,19 @@ def preview(job_id: str, payload: AnonymizationOptions) -> dict:
         result = run(job, profile_name, options, salt, write=False)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    if result.get("gate") and result["gate"].get("status") == "blocked":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "残留标识门禁未通过：预览输出中仍存在原始患者"
+                           "标识或 UID。",
+                "gate": result["gate"],
+                "counts": result["counts"],
+                "warnings": result["warnings"],
+                "patients": result["patients"],
+                "files": result["files"],
+                "changes": result["changes"],
+            })
     return _serialize(result, job_id, profile_label, options)
 
 
@@ -110,6 +124,13 @@ def process(job_id: str, payload: AnonymizationOptions) -> dict:
     # do not block the event loop (preview/status/download stay responsive).
     try:
         run(job, profile_name, options, salt, write=True)
+    except GateBlockedError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": str(exc),
+                "gate": exc.gate,
+            })
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -124,6 +145,7 @@ def process(job_id: str, payload: AnonymizationOptions) -> dict:
         "files": job.last_result["files"] if job.last_result else [],
         "warnings": job.last_result["warnings"] if job.last_result else [],
         "counts": job.last_result["counts"] if job.last_result else {},
+        "gate": job.gate,
     }
 
 
@@ -140,6 +162,7 @@ def job_status(job_id: str) -> dict:
         "download_url": (f"/api/jobs/{job_id}/download"
                          if job.status == "done" else None),
         "zip_filename": job.zip_filename,
+        "gate": job.gate,
     }
 
 
