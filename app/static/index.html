@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DICOM 检查匿名化工作台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⬠</span>
+    <div>
+      <h1>DICOM 检查匿名化工作台</h1>
+      <p>患者级稳定伪名 · UID 一致性重写 · 逐字段变更预览 · 打包下载</p>
+    </div>
+  </div>
+  <div id="stepIndicator" class="steps">
+    <span class="step active" data-step="1">1 上传</span>
+    <span class="step" data-step="2">2 配置</span>
+    <span class="step" data-step="3">3 预览</span>
+    <span class="step" data-step="4">4 下载</span>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- 1. Upload -->
+  <section class="card" id="uploadCard">
+    <h2>① 上传一组影像文件</h2>
+    <p class="hint">支持多文件选择或整个检查目录（含子目录结构）。建议一次上传同一位/同一批患者的完整检查，以便工具校验序列内引用关系。文件仅保存在本机服务器的临时目录中，不会发送到任何第三方。</p>
+    <div id="dropzone" class="dropzone">
+      <div class="dz-inner">
+        <div class="dz-icon">⤴</div>
+        <div class="dz-text">拖放 .dcm / DICOM 文件或目录到此处，或</div>
+        <div class="dz-buttons">
+          <label class="btn primary">
+            选择影像文件
+            <input type="file" id="fileInput" multiple hidden
+                   accept=".dcm,.DCM,.dicm,.ima,.img,.raw,application/dicom,*/*">
+          </label>
+          <label class="btn">
+            选择目录
+            <input type="file" id="dirInput" webkitdirectory hidden>
+          </label>
+        </div>
+        <div class="dz-meta">非 DICOM 文件会被自动识别并跳过。</div>
+      </div>
+    </div>
+    <div id="uploadProgress" class="progress hidden">
+      <div class="bar"><div id="uploadBar" class="fill"></div></div>
+      <span id="uploadText">上传中…</span>
+    </div>
+    <div id="fileList" class="file-list hidden"></div>
+    <div class="actions">
+      <button id="btnResetFiles" class="btn ghost hidden">清空重选</button>
+      <button id="btnUpload" class="btn primary" disabled>上传影像</button>
+    </div>
+  </section>
+
+  <!-- 2. Config -->
+  <section class="card hidden" id="configCard">
+    <h2>② 选择匿名化配置</h2>
+    <div id="profiles" class="profiles"></div>
+
+    <h3>选项微调</h3>
+    <div id="options" class="options-grid"></div>
+    <label class="salt-row">
+      伪名盐值（可选）
+      <input type="text" id="saltInput"
+             placeholder="留空使用服务器默认盐值；相同盐值 + 相同患者 = 相同伪名">
+    </label>
+    <div class="actions">
+      <button id="btnBack1" class="btn ghost">返回上传</button>
+      <button id="btnPreview" class="btn primary">生成变更预览</button>
+    </div>
+  </section>
+
+  <!-- 3. Preview -->
+  <section class="card hidden" id="previewCard">
+    <h2>③ 标签变更预览</h2>
+    <div id="summary" class="summary"></div>
+
+    <div id="warningBox" class="warnings hidden"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="changes">逐字段变更</button>
+      <button class="tab" data-tab="files">影像文件 / UID 映射</button>
+      <button class="tab" data-tab="patients">患者伪名</button>
+    </div>
+
+    <div id="tab-changes" class="tabpane">
+      <div class="toolbar">
+        <input type="search" id="changeFilter"
+               placeholder="筛选标签 / 动作 / 文件名 / 原值…">
+        <select id="changeAction">
+          <option value="">全部动作</option>
+        </select>
+        <span id="changeCount" class="muted"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="changes-table">
+          <thead><tr>
+            <th>文件</th><th>标签</th><th>名称</th><th>VR</th>
+            <th>动作</th><th>原值</th><th>新值</th>
+          </tr></thead>
+          <tbody id="changesBody"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="prevPage" class="btn small">上一页</button>
+        <span id="pageInfo"></span>
+        <button id="nextPage" class="btn small">下一页</button>
+      </div>
+    </div>
+
+    <div id="tab-files" class="tabpane hidden">
+      <div class="table-wrap">
+        <table class="files-table">
+          <thead><tr>
+            <th>#</th><th>源路径</th><th>模态</th><th>原患者</th>
+            <th>伪名患者</th><th>Study UID（原 → 新）</th>
+            <th>SOP UID（原 → 新）</th><th>状态</th>
+          </tr></thead>
+          <tbody id="filesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-patients" class="tabpane hidden">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>患者标识（源指纹，仅预览）</th><th>伪名 PatientName</th>
+            <th>伪名 PatientID</th><th>日期平移</th>
+          </tr></thead>
+          <tbody id="patientsBody"></tbody>
+        </table>
+      </div>
+      <p class="hint">伪名与 UID 由盐值通过 SHA-256 确定性派生：同一患者在任意批次中始终得到同一伪名；日期平移对同一患者为固定天数，检查间隔保持不变。</p>
+    </div>
+
+    <div class="actions">
+      <button id="btnBack2" class="btn ghost">返回配置</button>
+      <button id="btnProcess" class="btn primary">执行匿名化并打包</button>
+    </div>
+  </section>
+
+  <!-- 4. Result -->
+  <section class="card hidden" id="resultCard">
+    <h2>④ 完成</h2>
+    <div id="resultSummary" class="summary"></div>
+    <div id="resultWarnings" class="warnings hidden"></div>
+    <div class="actions">
+      <a id="btnDownload" class="btn primary" href="#">下载匿名化 ZIP</a>
+      <button id="btnStartOver" class="btn ghost">开始新的任务</button>
+    </div>
+    <p class="hint">ZIP 内以 <code>新StudyUID/新SeriesUID/新SOPUID.dcm</code> 组织，并附带 <code>anonymization-report.json</code>（仅含新标识与统计，不含原值）。</p>
+  </section>
+
+</main>
+
+<div id="toast" class="toast hidden"></div>
+<footer class="foot">本地运行 · 无第三方账号 · DICOM PS3.15 基础应用保密配置文件</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

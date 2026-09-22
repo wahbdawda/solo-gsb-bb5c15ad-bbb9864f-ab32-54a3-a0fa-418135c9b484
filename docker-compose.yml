@@ -1,0 +1,20 @@
+services:
+  dicombench:
+    build: .
+    image: dicom-anonymization-workbench:latest
+    container_name: dicom-anonymization-workbench
+    ports:
+      - "8000:8000"
+    environment:
+      # Change this salt in real deployments: it determines every pseudonym
+      # and new UID. Same salt + same patient = same pseudonym.
+      DICOMBENCH_SALT: "change-me-to-a-random-secret"
+      DICOMBENCH_DATA_DIR: /data
+      DICOMBENCH_MAX_UPLOAD_MB: "2048"
+      DICOMBENCH_JOB_TTL_SECONDS: "3600"
+    volumes:
+      - dicombench-data:/data
+    restart: unless-stopped
+
+volumes:
+  dicombench-data:
